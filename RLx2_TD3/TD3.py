@@ -2,7 +2,7 @@ import copy
 import numpy as np
 import torch
 import torch.nn.functional as F
-from TD3_MuJoCo.modules_TD3 import MLPActor, MLPCritic
+from RLx2_TD3.modules_TD3 import MLPActor, MLPCritic
 from DST.DST_Scheduler import DST_Scheduler
 from DST.utils import ReplayBuffer, get_W
 from torch.utils.tensorboard import SummaryWriter
@@ -12,71 +12,47 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class TD3(object):
 	def __init__(
 		self,
-		#TD3 basic
-		state_dim,
-		action_dim,
-		max_action,
-		hidden_dim=256,
-		discount=0.99,
-		tau=0.005,
-		policy_noise=0.2,
-		noise_clip=0.5,
-		policy_freq=2,
-		#sparse setting
-        sparse_actor=False,
-        sparse_critic=False,
-		static_actor=False,
-		static_critic=False,
-		actor_sparsity=0,
-		critic_sparsity=0,
-		sparsity_distribution=None,
-		#DST setting
-		T_end=975000,
-		#test
-		nstep=1,
-		delay_nstep=0,
-		#
-		tb_dir=None,
-		#args2Pruner
-		**kwargs
+		args,
+		writer
 	):
 		# RL hyperparameters
-		self.max_action = max_action
-		self.discount = discount
-		self.tau = tau
-		self.policy_noise = policy_noise
-		self.noise_clip = noise_clip
-		self.policy_freq = policy_freq
+		self.max_action = args.max_action
+		self.discount = args.discount
+		self.tau = args.tau
+		self.policy_noise = args.policy_noise
+		self.noise_clip = args.noise_clip
+		self.policy_freq = args.policy_freq
 
 		# Neural networks
-		self.actor = MLPActor(state_dim, action_dim, max_action, hidden_dim).to(device)
+		self.actor = MLPActor(args.state_dim, args.action_dim, args.max_action, args.hidden_dim).to(device)
 		self.actor_target = copy.deepcopy(self.actor)
 		self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=3e-4)
 
-		self.critic = MLPCritic(state_dim, action_dim, hidden_dim).to(device)
+		self.critic = MLPCritic(args.state_dim, args.action_dim, args.hidden_dim).to(device)
 		self.critic_target = copy.deepcopy(self.critic)
 		self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=3e-4)
 
+		self.sparse_actor = (args.actor_sparsity > 0)
+		self.sparse_critic = (args.critic_sparsity > 0)
+
 		self.total_it = 0
-		self.sparse_actor = sparse_actor
-		self.sparse_critic = sparse_critic
-		self.nstep = nstep
-		self.delay_nstep = delay_nstep
-
-		self.current_mean_reward = 0.
-
-		self.writer = SummaryWriter(tb_dir)
-
-		self.tb_interval = int(T_end/10000)
+		self.nstep = args.nstep
+		self.delay_nstep = args.delay_nstep
+		self.writer:SummaryWriter = writer
+		self.tb_interval = int(args.T_end/1000)
 
 		if self.sparse_actor: # Sparsify the actor at initialization
-			self.actor_pruner = DST_Scheduler(model=self.actor, optimizer=self.actor_optimizer, sparsity=actor_sparsity, T_end=int(T_end/self.policy_freq), static_topo=static_actor, sparsity_distribution=sparsity_distribution, **kwargs)
+			self.actor_pruner = DST_Scheduler(model=self.actor, optimizer=self.actor_optimizer, sparsity=args.actor_sparsity, T_end=int(args.T_end/self.policy_freq), static_topo=args.static_actor, sparsity_distribution=args.sparsity_distribution, **kwargs)
 			self.targer_actor_W, _ = get_W(self.actor_target)
+			for w, mask in zip(self.targer_actor_W, self.actor_pruner.backward_masks):
+				w.data *= mask
 		else:
 			self.actor_pruner = lambda: True
 		if self.sparse_critic: # Sparsify the critic at initialization
-			self.critic_pruner = DST_Scheduler(model=self.critic, optimizer=self.critic_optimizer, sparsity=critic_sparsity, T_end=T_end, static_topo=static_critic, sparsity_distribution=sparsity_distribution, **kwargs)
+			self.critic_pruner = DST_Scheduler(model=self.critic, optimizer=self.critic_optimizer, sparsity=args.critic_sparsity, T_end=args.T_end, static_topo=args.static_critic, sparsity_distribution=args.sparsity_distribution, **kwargs)
 			self.targer_critic_W, _ = get_W(self.critic_target)
+			for w, mask in zip(self.targer_critic_W, self.critic_pruner.backward_masks):
+				w.data *= mask
 		else:
 			self.critic_pruner = lambda: True
 

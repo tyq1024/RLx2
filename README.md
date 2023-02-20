@@ -1,6 +1,8 @@
 # RLx2: Training a Sparse Deep Reinforcement Learning Model from Scratch
 
-This repository is based on the open-source [TD3](https://github.com/sfujim/TD3) and torch version of [RigL](https://github.com/nollied/rigl-torch) codebase. We use MuJoCo 2.0.0 for our experiments.
+This repository is the official inplementation of RLx2. The DST Scheduler is inplemented based on an open-source PyTorch version of [RigL](https://github.com/nollied/rigl-torch) codebase. We implement the RL algorithms based on the official codebase of [TD3](https://github.com/sfujim/TD3) and an open-source PyTorch implementation of [SAC](https://github.com/denisyarats/pytorch_sac).
+
+We use MuJoCo 2.0.0 for our experiments.
 
 ## Overview
 ```
@@ -8,22 +10,25 @@ This repository is based on the open-source [TD3](https://github.com/sfujim/TD3)
 │   ├── __init__.py
 │   ├── DST_Scheduler.py        //Scheduler for topology evolution
 │   └── utils.py                //Other modules used      
-├── SAC_MuJoCo
-│   ├── DST_SAC_MuJoCo.py           //Train with SAC
+├── RLx2_SAC
+│   ├── train.py                    //Train with SAC
 │   ├── SAC.py                      //SAC with n-step
 │   └── modules_SAC.py              //Neural Networks
-├── TD3_MuJoCo
-│   ├── DST_TD3_MuJoCo.py           //Train with TD3
+├── RLx2_TD3
+│   ├── train.py                    //Train with TD3
 │   ├── TD3.py                      //TD3 with n-step
 │   └── modules_TD3.py              //Neural Networks
-├── README.md
-└── requirements.txt
+├── conda_env.yml 
+└── README.md
 ```
 
 ## Usage
 
+create conda environment:
+
 ```
-pip install -r requirements.txt
+conda env create -f conda_env.yml
+conda activate RLx2
 ```
 
 To run RLx2 in each single environment with TD3:

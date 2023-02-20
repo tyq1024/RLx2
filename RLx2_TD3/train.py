@@ -39,9 +39,9 @@ def eval_policy(policy, env_name, seed, eval_episodes=10):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exp_id", default='exptest')
-    parser.add_argument("--env", default='HalfCheetah-v3')
-    parser.add_argument("--seed", default=1, type=int)
+    parser.add_argument("--exp_id", default='exptest')                              # Experiment name
+    parser.add_argument("--env", default='HalfCheetah-v3')                          # Environment
+    parser.add_argument("--seed", default=1, type=int)                              # Seed
     parser.add_argument("--start_timesteps", default=25e3, type=int)                # Time steps initial random policy is used
     parser.add_argument("--eval_freq", default=5e3, type=int)                       # How often (time steps) we evaluate
     parser.add_argument("--max_timesteps", default=3e6, type=int)                   # Max time steps to run environment
@@ -53,13 +53,10 @@ def main():
     parser.add_argument("--noise_clip", default=0.5)                                # Range to clip target policy noise
     parser.add_argument("--policy_freq", default=2, type=int)                       # Frequency of delayed policy updates
     parser.add_argument("--hidden_dim", default=256, type=int)                      # Num of hidden neurons in each layer
-    parser.add_argument("--sparse_actor", action='store_true', default=False)       # Use sparse actor
-    parser.add_argument("--sparse_critic", action='store_true',default=False)       # Use sparse critic
     parser.add_argument("--static_actor", action='store_true', default=False)       # Fix the topology of actor
     parser.add_argument("--static_critic", action='store_true', default=False)      # Fix the topology of critic     
     parser.add_argument("--actor_sparsity", default=0., type=float)                 # Sparsity of actor
     parser.add_argument("--critic_sparsity",default=0., type=float)                 # Sparsity of critic
-    parser.add_argument("--sparsity_distribution", default='ER')                    # Sparsity allocation strategy 
     parser.add_argument("--delta", default=10000, type=int)                         # Mask update interval
     parser.add_argument("--zeta", default=0.5, type=float)                          # Initial mask update ratio
     parser.add_argument("--random_grow", action='store_true', default=False)        # Use random grow scheme
@@ -75,6 +72,7 @@ def main():
     the_dir = 'results_TD3' 
     root_dir = './'+the_dir+'/'+args.exp_id+'_'+args.env
     argsDict = args.__dict__
+    del argsDict['seed']
     config_json=json.dumps(argsDict, indent=4)
     if not os.path.exists(root_dir):
         os.makedirs(root_dir)
@@ -90,25 +88,16 @@ def main():
 
     exp_dir = root_dir+'/'+str(args.seed)
     tensorboard_dir = exp_dir+'/tensorboard/'
-    tensorboard_dir2 = exp_dir+'/tensorboard2/'
     model_dir = exp_dir+'/model/'
-    supervised_dir = exp_dir+'/supervised/'
 
     
     if not os.path.exists(tensorboard_dir):
         os.makedirs(tensorboard_dir)
 
-    if not os.path.exists(tensorboard_dir2):
-        os.makedirs(tensorboard_dir2)
-
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
 
-    if not os.path.exists(supervised_dir):
-        os.makedirs(supervised_dir)
-
-    if args.env == 'Humanoid-v3' or args.env == 'Ant-v3':
-        torch.set_num_threads(1)
+    torch.set_num_threads(1)
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
@@ -124,34 +113,18 @@ def main():
     action_dim = env.action_space.shape[0] 
     max_action = float(env.action_space.high[0])
 
-    kwargs = {
-		"state_dim": state_dim,
-		"action_dim": action_dim,
-		"max_action": max_action
-	}
+    args.state_dim = state_dim
+    args.action_dim = action_dim
+    args.max_action = max_action
 
-    del_keys = ['exp_id', 'seed', 'env', 'start_timesteps', 'use_BC', 'LTH_exp_id','buffer_threshold','eval_freq', 'max_timesteps', 'batch_size', 'buffer_max_size', 'buffer_min_size','use_dynamic_buffer','BC_exp_id', 'expl_noise']
-    modify_keys = ['policy_noise', 'noise_clip']
-
-    for k,v in argsDict.items():
-        if k not in del_keys:
-            if k in modify_keys:
-                v *= max_action
-            kwargs[k] = v
+    args.policy_noise *= max_action
+    args.noise_clip *= max_action
 
     # Initialize policy
     # Target policy smoothing is scaled wrt the action scale
     writer = SummaryWriter(tensorboard_dir)
-    kwargs["tb_dir"] = tensorboard_dir2
-    policy = TD3(**kwargs)
-    if args.LTH_exp_id is not None:
-        LTH_dir = './'+the_dir+'/'+args.LTH_exp_id+'_'+args.env+'/'+str(args.seed)+'/model/'
-        policy.actor.load_state_dict(torch.load(LTH_dir+'actor0'))
-        policy.actor_pruner.backward_masks = torch.load(LTH_dir+'actor_masks')
-        if not args.use_BC:
-            policy.critic.load_state_dict(torch.load(LTH_dir+'critic0'))
-            policy.critic_pruner.backward_masks = torch.load(LTH_dir+'critic_masks')
-
+    policy = TD3(args, writer)
+ 
     replay_buffer = ReplayBuffer(state_dim, action_dim, args.buffer_max_size)
 
     # Evaluate untrained policy
@@ -166,7 +139,7 @@ def main():
     eval_num=0
 
     torch.save(policy.actor.state_dict(), model_dir+'actor0')
-    if not args.use_BC: torch.save(policy.critic.state_dict(),model_dir+'critic0')
+    torch.save(policy.critic.state_dict(),model_dir+'critic0')
 
     for t in range(int(args.max_timesteps)):
         
@@ -232,15 +205,14 @@ def main():
             if np.mean(recent_eval) > best_eval:
                 best_eval = np.mean(recent_eval)
                 torch.save(policy.actor.state_dict(), model_dir+'actor')
-                if not args.use_BC: torch.save(policy.critic.state_dict(),model_dir+'critic')
-                if args.sparse_actor: torch.save(policy.actor_pruner.backward_masks,model_dir+'actor_masks')
-                if (not args.use_BC) and args.sparse_critic: torch.save(policy.critic_pruner.backward_masks,model_dir+'critic_masks')
+                torch.save(policy.critic.state_dict(),model_dir+'critic')
+                if args.actor_sparsity > 0: torch.save(policy.actor_pruner.backward_masks, model_dir+'actor_masks')
+                if args.critic_sparsity > 0: torch.save(policy.critic_pruner.backward_masks, model_dir+'critic_masks')
                 temp = json.dumps(best_eval,indent=4)
                 with open(exp_dir+'/reward_value','w')as f:
                     f.write(temp)
     writer.close()
     policy.writer.close()
-
 
 if __name__ == "__main__":
     main()
