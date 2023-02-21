@@ -9,7 +9,7 @@ import gym
 import argparse
 import os
 
-from DST.utils import ReplayBuffer
+from DST.utils import ReplayBuffer, show_sparsity
 from TD3 import TD3
 from torch.utils.tensorboard import SummaryWriter
 import json
@@ -126,6 +126,14 @@ def main():
     # Target policy smoothing is scaled wrt the action scale
     writer = SummaryWriter(tensorboard_dir)
     policy = TD3(args, writer)
+
+    if args.actor_sparsity > 0:
+        print("Training a sparse actor network")
+        show_sparsity(policy.actor.state_dict())
+    if args.critic_sparsity > 0:
+        print("Training a sparse critic network")
+        show_sparsity(policy.critic.state_dict())
+
  
     replay_buffer = ReplayBuffer(state_dim, action_dim, args.buffer_max_size)
 

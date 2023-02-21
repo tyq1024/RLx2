@@ -57,7 +57,7 @@ def sparse_set(weights:list[torch.Tensor], sparsity:list[float], keep_first_laye
             is_valid = False
             for weight_i, weight_raw_prob in raw_probabilities.items():
                 if weight_raw_prob == max_prob:
-                    print(f"Sparsity of layer {weight_i} has to be set to 0.")
+                    #print(f"Sparsity of layer {weight_i} has to be set to 0.")
                     dense_layers.add(weight_i)
         else:
             is_valid = True

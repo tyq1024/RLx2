@@ -16,8 +16,8 @@ def show_sparsity(state_dict, only_weight=True, to_print=True):
 		layer=layer.detach().cpu().numpy()
 		zero=np.sum(layer.ravel())
 		total_zero+=zero
-		if zero != 0 and to_print: print(f"{name} : {zero/dense}")
-	if to_print: print(f"whole model: {total_zero/total_dense}")
+		if zero != 0 and to_print: print(f"{name} sparsity : {zero/dense:.4f}")
+	if to_print: print(f"whole model sparsity: {total_zero/total_dense:.4f}")
 	return total_zero/total_dense
 
 def get_weighted_layers(model, i=0, layers=None, layers_type=None):

@@ -34,11 +34,11 @@ conda activate RLx2
 To run RLx2 in each single environment with TD3:
 
 ```
-cd TD3_MuJoCo
-python DST_TD3_MuJoCo.py --env <environment_name> --sparse_actor --sparse_critic --actor_sparsity <actor_sparsity> --critic_sparsity <critic_sparsity> --nstep 3 --delay_nstep 300000 --use_dynamic_buffer
+cd RLx2_TD3
+python train.py --env <environment_name> --actor_sparsity <actor_sparsity> --critic_sparsity <critic_sparsity> --nstep 3 --delay_nstep 300000 --use_dynamic_buffer
 ```
 To run RLx2 in each single environment with SAC:
 
 ```
-cd SAC_MuJoCo
-python DST_SAC_MuJoCo.py --env <environment_name> --sparse_actor --sparse_critic --actor_sparsity <actor_sparsity> --critic_sparsity <critic_sparsity> --nstep 3 --delay_nstep 300000 --use_dynamic_buffer
+cd RLx2_SAC
+python train.py --env <environment_name> --actor_sparsity <actor_sparsity> --critic_sparsity <critic_sparsity> --nstep 3 --delay_nstep 300000 --use_dynamic_buffer
