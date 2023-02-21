@@ -15,6 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 import json
 import torch.nn.functional as F
 from collections import deque
+import copy
 
 
 # Runs policy for X episodes and returns average reward
@@ -66,12 +67,13 @@ def main():
     parser.add_argument("--buffer_min_size", default=int(1e5),type=int)             # Lower bound of buffer capacity
     parser.add_argument("--use_dynamic_buffer", action='store_true', default=False) # Use dynamic buffer
     parser.add_argument("--buffer_threshold", default=0.2, type=float)              # Threshold of policy distance 
+    parser.add_argument("--buffer_adjustment_interval", default=int(1e4),type=int)  # How often (time steps) we check the buffer
 
     args = parser.parse_args()
     args.T_end = (args.max_timesteps - args.start_timesteps)
     the_dir = 'results_TD3' 
     root_dir = './'+the_dir+'/'+args.exp_id+'_'+args.env
-    argsDict = args.__dict__
+    argsDict = copy.deepcopy(args.__dict__)
     del argsDict['seed']
     config_json=json.dumps(argsDict, indent=4)
     if not os.path.exists(root_dir):
@@ -163,11 +165,11 @@ def main():
         # Store data in replay buffer
 
         replay_buffer.add(state, action, next_state, reward, done_bool, action_mean, episode_timesteps >= env._max_episode_steps)
-        if args.use_dynamic_buffer and (t+1) % 10000 == 0:# and replay_buffer_Critic.size > args.buffer_min_size:
+        if args.use_dynamic_buffer and (t+1) % args.buffer_adjustment_interval == 0:
             if replay_buffer.size == replay_buffer.max_size: 
-                ind = (replay_buffer.ptr + np.arange(2048)) % replay_buffer.max_size
+                ind = (replay_buffer.ptr + np.arange(8*args.batch_size)) % replay_buffer.max_size
             else:
-                ind = (replay_buffer.left_ptr + np.arange(2048)) % replay_buffer.max_size
+                ind = (replay_buffer.left_ptr + np.arange(8*args.batch_size)) % replay_buffer.max_size
             batch_state = torch.FloatTensor(replay_buffer.state[ind]).to(device)
             batch_action_mean = torch.FloatTensor(replay_buffer.action_mean[ind]/max_action).to(device)
             with torch.no_grad():
@@ -208,11 +210,7 @@ def main():
                 torch.save(policy.critic.state_dict(),model_dir+'critic')
                 if args.actor_sparsity > 0: torch.save(policy.actor_pruner.backward_masks, model_dir+'actor_masks')
                 if args.critic_sparsity > 0: torch.save(policy.critic_pruner.backward_masks, model_dir+'critic_masks')
-                temp = json.dumps(best_eval,indent=4)
-                with open(exp_dir+'/reward_value','w')as f:
-                    f.write(temp)
     writer.close()
-    policy.writer.close()
 
 if __name__ == "__main__":
     main()

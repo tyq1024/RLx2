@@ -1,106 +1,68 @@
 import copy
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from TD3_MuJoCo.modules_TD3 import MLPActor, MLPCritic
-from DST.DST_Scheduler import DST_Scheduler, sparse_set
+from DST.DST_Scheduler import DST_Scheduler
 from DST.utils import ReplayBuffer, get_W
-from DST.utils import show_sparsity
-import os
-import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from modules_SAC import DiagGaussianActor, DoubleQCritic
-import math
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class SAC(object):
     def __init__(
-        self,
-        #SAC basic
-        state_dim,
-        action_dim,
-        max_action,
-        hidden_dim=256,
-        discount=0.99,
-        lr=3e-4,
-        actor_update_frequency=1, 
-        tau=0.005, 
-        critic_target_update_frequency=1,
-        log_std_bounds=None,
-        #sparse setting
-        sparse_actor=False,
-        sparse_critic=False,
-		static_actor=False,
-		static_critic=False,
-		actor_sparsity=0,
-		critic_sparsity=0,
-		sparsity_distribution=None,
-		#DST setting
-		T_end=975000,
-		#test
-		nstep=1,
-		delay_nstep=0,
-		#
-		tb_dir=None,
-		#args2Pruner
-		**kwargs
+		self,
+		args,
+		writer
     ):
 
-        self.critic = DoubleQCritic(state_dim, action_dim, hidden_dim).to(device)
+        self.critic = DoubleQCritic(args.state_dim, args.action_dim, args.hidden_dim).to(device)
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_target.load_state_dict(self.critic.state_dict())
 
-        self.actor = DiagGaussianActor(state_dim, action_dim, max_action, hidden_dim, log_std_bounds).to(device)
+        self.actor = DiagGaussianActor(args.state_dim, args.action_dim, args.max_action, args.hidden_dim, args.log_std_bounds).to(device)
 
         self.log_alpha = torch.tensor(0.0).to(device)
         self.log_alpha.requires_grad = True
         # set target entropy to -|A|
-        self.target_entropy = -action_dim
+        self.target_entropy = -args.action_dim
 
         # optimizers
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
-                                                lr=lr)
+                                                lr=args.lr)
 
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
-                                                 lr=lr)
+                                                 lr=args.lr)
 
         self.log_alpha_optimizer = torch.optim.Adam([self.log_alpha],
-                                                    lr=lr)
+                                                    lr=args.lr)
 
-        self.discount = discount
-        self.tau =tau
-        # set target entropy to -|A|
-        self.target_entropy = -action_dim
+        self.discount = args.discount
+        self.tau = args.tau
 
         self.total_it = 0
-        self.sparse_actor = sparse_actor
-        self.sparse_critic = sparse_critic
-        self.nstep = nstep
-        self.delay_nstep = delay_nstep
-        self.actor_update_frequency = actor_update_frequency
-        self.critic_target_update_frequency = critic_target_update_frequency
+        self.sparse_actor = (args.actor_sparsity > 0)
+        self.sparse_critic = (args.critic_sparsity > 0)
+        self.nstep = args.nstep
+        self.delay_nstep = args.delay_nstep
+        self.actor_update_frequency = args.actor_update_frequency
+        self.critic_target_update_frequency = args.critic_target_update_frequency
 
         self.current_mean_reward = 0.
 
-        self.writer = SummaryWriter(tb_dir)
+        self.writer:SummaryWriter = writer
 
-        self.tb_interval = int(T_end/10000)
+        self.tb_interval = int(args.T_end/1000)
 
         if self.sparse_actor:
-            self.actor_pruner = DST_Scheduler(model=self.actor, optimizer=self.actor_optimizer, sparsity=actor_sparsity, T_end=int(T_end/self.actor_update_frequency), static_topo=static_actor, sparsity_distribution=sparsity_distribution, **kwargs)
-            self.supervised_actor_list = {'mask_explore':[], 'mask_change':[], 'mask_eq_size':[], 'mask_eq_sp':[]}
-            self.sup_mask_actor = copy.deepcopy(self.actor_pruner.backward_masks)
-            self.last_mask_actor = copy.deepcopy(self.actor_pruner.backward_masks)
+            self.actor_pruner = DST_Scheduler(model=self.actor, optimizer=self.actor_optimizer, sparsity=args.actor_sparsity, T_end=int(args.T_end/self.actor_update_frequency), static_topo=args.static_actor, zeta=args.zeta, delta=args.delta, random_grow=args.random_grow)
         else:
             self.actor_pruner = lambda: True
         if self.sparse_critic:
-            self.critic_pruner = DST_Scheduler(model=self.critic, optimizer=self.critic_optimizer, sparsity=critic_sparsity, T_end=T_end, static_topo=static_critic, sparsity_distribution=sparsity_distribution, **kwargs)
+            self.critic_pruner = DST_Scheduler(model=self.critic, optimizer=self.critic_optimizer, sparsity=args.critic_sparsity, T_end=args.T_end, static_topo=args.static_critic, zeta=args.zeta, delta=args.delta, random_grow=args.random_grow)
             self.targer_critic_W, _ = get_W(self.critic_target)
-            self.supervised_critic_list = {'mask_explore':[], 'mask_change':[], 'mask_eq_size':[], 'mask_eq_sp':[]}
-            self.sup_mask_critic = copy.deepcopy(self.critic_pruner.backward_masks)
-            self.last_mask_critic = copy.deepcopy(self.critic_pruner.backward_masks)
+            for w, mask in zip(self.targer_critic_W, self.critic_pruner.backward_masks):
+                w.data *= mask
         else:
             self.critic_pruner = lambda: True
 
@@ -187,7 +149,7 @@ class SAC(object):
             self.log_alpha_optimizer.step()
             if self.total_it % self.tb_interval == 0: self.writer.add_scalar('alpha',self.alpha.item(), self.total_it)
 
-            # Update the frozen target models
+        # Update the frozen target models
         if self.total_it % self.critic_target_update_frequency == 0:
             for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)

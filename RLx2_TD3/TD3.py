@@ -42,14 +42,14 @@ class TD3(object):
 		self.tb_interval = int(args.T_end/1000)
 
 		if self.sparse_actor: # Sparsify the actor at initialization
-			self.actor_pruner = DST_Scheduler(model=self.actor, optimizer=self.actor_optimizer, sparsity=args.actor_sparsity, T_end=int(args.T_end/self.policy_freq), static_topo=args.static_actor, sparsity_distribution=args.sparsity_distribution, **kwargs)
+			self.actor_pruner = DST_Scheduler(model=self.actor, optimizer=self.actor_optimizer, sparsity=args.actor_sparsity, T_end=int(args.T_end/self.policy_freq), static_topo=args.static_actor, zeta=args.zeta, delta=args.delta, random_grow=args.random_grow)
 			self.targer_actor_W, _ = get_W(self.actor_target)
 			for w, mask in zip(self.targer_actor_W, self.actor_pruner.backward_masks):
 				w.data *= mask
 		else:
 			self.actor_pruner = lambda: True
 		if self.sparse_critic: # Sparsify the critic at initialization
-			self.critic_pruner = DST_Scheduler(model=self.critic, optimizer=self.critic_optimizer, sparsity=args.critic_sparsity, T_end=args.T_end, static_topo=args.static_critic, sparsity_distribution=args.sparsity_distribution, **kwargs)
+			self.critic_pruner = DST_Scheduler(model=self.critic, optimizer=self.critic_optimizer, sparsity=args.critic_sparsity, T_end=args.T_end, static_topo=args.static_critic, zeta=args.zeta, delta=args.delta, random_grow=args.random_grow)
 			self.targer_critic_W, _ = get_W(self.critic_target)
 			for w, mask in zip(self.targer_critic_W, self.critic_pruner.backward_masks):
 				w.data *= mask
@@ -123,6 +123,7 @@ class TD3(object):
 			# Update the frozen target models
 			for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
 				target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+			# Note we need to also sparsify the target network. Here we simply use the same mask.
 			if self.sparse_critic:
 				for w, mask in zip(self.targer_critic_W, self.critic_pruner.backward_masks):
 					w.data *= mask
