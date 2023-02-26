@@ -2,7 +2,7 @@
 
 This repository is the official inplementation of RLx2. The DST Scheduler is inplemented based on an open-source PyTorch version of [RigL](https://github.com/nollied/rigl-torch) codebase. We implement the RL algorithms based on the official codebase of [TD3](https://github.com/sfujim/TD3) and an open-source PyTorch implementation of [SAC](https://github.com/denisyarats/pytorch_sac).
 
-We use MuJoCo 2.0.0 for our experiments.
+We use [MuJoCo](https://mujoco.org/) 2.0.0 in [OpenAI gym](https://github.com/openai/gym) for our experiments.
 
 ## Overview
 ```
@@ -42,3 +42,15 @@ To run RLx2 in each single environment with SAC:
 ```
 cd RLx2_SAC
 python train.py --env <environment_name> --actor_sparsity <actor_sparsity> --critic_sparsity <critic_sparsity> --nstep 3 --delay_nstep 300000 --use_dynamic_buffer
+```
+
+## Cite
+
+```
+@article{tan2022rlx2,
+  title={RLx2: Training a Sparse Deep Reinforcement Learning Model from Scratch},
+  author={Tan, Yiqin and Hu, Pihe and Pan, Ling and Huang, Longbo},
+  journal={arXiv preprint arXiv:2205.15043},
+  year={2022}
+}
+```

@@ -9,12 +9,10 @@ import gym
 import argparse
 import os
 
-from DST.utils import ReplayBuffer
+from DST.utils import ReplayBuffer, show_sparsity
 from SAC import SAC
-#from BC import BC
 from torch.utils.tensorboard import SummaryWriter
 import json
-import matplotlib.pyplot as plt
 import torch.nn.functional as F
 import random
 import copy
@@ -125,6 +123,13 @@ def main():
     writer = SummaryWriter(tensorboard_dir)
     policy = SAC(args, writer)
 
+    if args.actor_sparsity > 0:
+        print("Training a sparse actor network")
+        show_sparsity(policy.actor.state_dict())
+    if args.critic_sparsity > 0:
+        print("Training a sparse critic network")
+        show_sparsity(policy.critic.state_dict())
+
     replay_buffer = ReplayBuffer(state_dim, action_dim, args.buffer_max_size)
 
     # Evaluate untrained policy
@@ -139,7 +144,7 @@ def main():
     eval_num=0
 
     torch.save(policy.actor.state_dict(), model_dir+'actor0')
-    if not args.use_BC: torch.save(policy.critic.state_dict(),model_dir+'critic0')
+    torch.save(policy.critic.state_dict(),model_dir+'critic0')
 
     for t in range(int(args.max_timesteps)):
         

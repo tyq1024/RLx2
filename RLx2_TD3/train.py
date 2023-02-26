@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-from collections import deque
 import sys
 sys.path.append(r'../')
 import numpy as np
