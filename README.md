@@ -47,10 +47,12 @@ python train.py --env <environment_name> --actor_sparsity <actor_sparsity> --cri
 ## Cite
 
 ```
-@article{tan2022rlx2,
-  title={RLx2: Training a Sparse Deep Reinforcement Learning Model from Scratch},
-  author={Tan, Yiqin and Hu, Pihe and Pan, Ling and Huang, Longbo},
-  journal={arXiv preprint arXiv:2205.15043},
-  year={2022}
+@inproceedings{
+tan2023rlx,
+title={{RL}x2: Training a Sparse Deep Reinforcement Learning Model from Scratch},
+author={Yiqin Tan and Pihe Hu and Ling Pan and Jiatai Huang and Longbo Huang},
+booktitle={International Conference on Learning Representations},
+year={2023},
+url={https://openreview.net/forum?id=DJEEqoAq7to}
 }
 ```
