@@ -61,8 +61,6 @@ class SAC(object):
         if self.sparse_critic:
             self.critic_pruner = DST_Scheduler(model=self.critic, optimizer=self.critic_optimizer, sparsity=args.critic_sparsity, T_end=args.T_end, static_topo=args.static_critic, zeta=args.zeta, delta=args.delta, random_grow=args.random_grow)
             self.targer_critic_W, _ = get_W(self.critic_target)
-            for w, mask in zip(self.targer_critic_W, self.critic_pruner.backward_masks):
-                w.data *= mask
         else:
             self.critic_pruner = lambda: True
 
@@ -79,19 +77,19 @@ class SAC(object):
     def train(self, replay_buffer:ReplayBuffer, batch_size=256):
         self.total_it += 1
 
-        current_n = self.nstep if self.total_it >= self.delay_nstep else 1
+        current_nstep = self.nstep if self.total_it >= self.delay_nstep else 1
 
-        if self.total_it % self.tb_interval == 0: self.writer.add_scalar('current_nstep', current_n, self.total_it)
+        if self.total_it % self.tb_interval == 0: self.writer.add_scalar('current_nstep', current_nstep, self.total_it)
             
-        state, action, next_state, reward, not_done, _ , reset_flag= replay_buffer.sample(batch_size, current_n)
-
+        state, action, next_state, reward, not_done, _ , reset_flag= replay_buffer.sample(batch_size, current_nstep)
+        
         with torch.no_grad():
             accum_reward = torch.zeros(reward[:,0].shape).to(device)
             have_not_done = torch.ones(not_done[:,0].shape).to(device)
             have_not_reset = torch.ones(not_done[:,0].shape).to(device)
             modified_n = torch.zeros(not_done[:,0].shape).to(device)
             nstep_next_action = torch.zeros(action[:,0].shape).to(device)
-            for k in range(current_n):
+            for k in range(current_nstep):
                 accum_reward += have_not_reset*have_not_done*self.discount**k*reward[:,k]
                 have_not_done *= torch.maximum(not_done[:,k], 1-have_not_reset)
                 dist = self.actor(next_state[:,k])
@@ -99,7 +97,7 @@ class SAC(object):
                 nstep_next_action += have_not_reset*have_not_done*(next_action-nstep_next_action)
                 log_prob = dist.log_prob(next_action).sum(-1, keepdim=True)
                 accum_reward += have_not_reset*have_not_done*self.discount**(k+1)*(- self.alpha.detach() * log_prob)
-                if k == current_n - 1:
+                if k == current_nstep - 1:
                     break
                 have_not_reset *= (1-reset_flag[:,k])
                 modified_n += have_not_reset
@@ -108,11 +106,11 @@ class SAC(object):
             # Compute the target Q value
             target_Q1, target_Q2 = self.critic_target(nstep_next_state, nstep_next_action)
             target_Q = torch.min(target_Q1, target_Q2)
-            if current_n == 1:
+            if current_nstep == 1:
                 target_Q = accum_reward.reshape(target_Q.shape) + have_not_done.reshape(target_Q.shape) * self.discount * target_Q
             else:
                 target_Q = accum_reward.reshape(target_Q.shape) + have_not_done.reshape(target_Q.shape) * self.discount**(modified_n + 1) * target_Q
-
+        
         # Get current Q estimates
         current_Q1, current_Q2 = self.critic(state[:,0], action[:,0])
         # Compute critic loss

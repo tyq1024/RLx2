@@ -44,15 +44,11 @@ class TD3(object):
 		if self.sparse_actor: # Sparsify the actor at initialization
 			self.actor_pruner = DST_Scheduler(model=self.actor, optimizer=self.actor_optimizer, sparsity=args.actor_sparsity, T_end=int(args.T_end/self.policy_freq), static_topo=args.static_actor, zeta=args.zeta, delta=args.delta, random_grow=args.random_grow)
 			self.targer_actor_W, _ = get_W(self.actor_target)
-			for w, mask in zip(self.targer_actor_W, self.actor_pruner.backward_masks):
-				w.data *= mask
 		else:
 			self.actor_pruner = lambda: True
 		if self.sparse_critic: # Sparsify the critic at initialization
 			self.critic_pruner = DST_Scheduler(model=self.critic, optimizer=self.critic_optimizer, sparsity=args.critic_sparsity, T_end=args.T_end, static_topo=args.static_critic, zeta=args.zeta, delta=args.delta, random_grow=args.random_grow)
 			self.targer_critic_W, _ = get_W(self.critic_target)
-			for w, mask in zip(self.targer_critic_W, self.critic_pruner.backward_masks):
-				w.data *= mask
 		else:
 			self.critic_pruner = lambda: True
 
@@ -69,6 +65,7 @@ class TD3(object):
 		if self.total_it % self.tb_interval == 0: self.writer.add_scalar('current_nstep', current_nstep, self.total_it)
 		
 		state, action, next_state, reward, not_done, _, reset_flag = replay_buffer.sample(batch_size, current_nstep)
+		
 		with torch.no_grad():
 			noise = (
 				torch.randn_like(action[:,0]) * self.policy_noise

@@ -62,7 +62,7 @@ def main():
     parser.add_argument("--random_grow", action='store_true', default=False)        # Use random grow scheme
     parser.add_argument("--nstep", default=1, type=int)                             # N-step
     parser.add_argument("--delay_nstep", default=0, type=int)                       # Delay of using N-step
-    parser.add_argument("--buffer_max_size", default=int(3e6), type=int)            # Upper bound of buffer capacity 
+    parser.add_argument("--buffer_max_size", default=int(1e6), type=int)            # Upper bound of buffer capacity 
     parser.add_argument("--buffer_min_size", default=int(1e5),type=int)             # Lower bound of buffer capacity
     parser.add_argument("--use_dynamic_buffer", action='store_true', default=False) # Use dynamic buffer
     parser.add_argument("--buffer_threshold", default=0.2, type=float)              # Threshold of policy distance 

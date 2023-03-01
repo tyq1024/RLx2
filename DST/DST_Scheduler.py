@@ -4,6 +4,7 @@ from typing import Dict
 import numpy as np
 import torch
 from torch._C import device
+import torch.distributed as dist
 
 from DST.utils import get_W
 
@@ -165,28 +166,8 @@ class DST_Scheduler:
         assert self.grad_accumulation_n > 0 and self.grad_accumulation_n < delta
 
     @torch.no_grad()
-    def random_sparsify(self):
-        self.backward_masks = []
-        for l, w in enumerate(self.W):
-            # if sparsity is 0%, skip
-            if self.S[l] < 0:
-                self.backward_masks.append(None)
-                continue
-
-            n = self.N[l]
-            s = int(self.S[l] * n)
-            perm = torch.randperm(n)
-            perm = perm[:s]
-            flat_mask = torch.ones(n, device=w.device)
-            flat_mask[perm] = 0
-            mask = torch.reshape(flat_mask, w.shape)
-
-            mask = mask.bool()
-            w *= mask
-            self.backward_masks.append(mask)
-
-    @torch.no_grad()
     def weight_sparsify(self):
+        is_dist = dist.is_initialized()
         self.backward_masks = []
         for l, w in enumerate(self.W):
             # if sparsity is 0%, skip
@@ -202,6 +183,9 @@ class DST_Scheduler:
             flat_mask = torch.zeros(n, device=w.device)
             flat_mask[sorted_indices] = 1
             mask = torch.reshape(flat_mask, w.shape)
+
+            if is_dist:
+                dist.broadcast(mask, 0)
 
             mask = mask.bool()
             w *= mask
@@ -275,6 +259,9 @@ class DST_Scheduler:
 
         drop_fraction = self.cosine_annealing()
 
+        is_dist = dist.is_initialized()
+        world_size = dist.get_world_size() if is_dist else None
+
         for l, w in enumerate(self.W):
             # if sparsity is 0%, skip
             if self.S[l] <= 0:
@@ -288,6 +275,13 @@ class DST_Scheduler:
                 score_grow = torch.abs(self.backward_hook_objects[l].dense_grad)
             else:
                 score_grow = torch.rand(self.backward_hook_objects[l].dense_grad.size()).to(device)
+            # if is distributed, synchronize scores
+            if is_dist:
+                dist.all_reduce(score_drop)  # get the sum of all drop scores
+                score_drop /= world_size     # divide by world size (average the drop scores)
+
+                dist.all_reduce(score_grow)  # get the sum of all grow scores
+                score_grow /= world_size     # divide by world size (average the grow scores)
 
             # calculate drop/grow quantities
             n_total = self.N[l]
