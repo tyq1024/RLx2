@@ -4,7 +4,7 @@ Code for the paper ["RLx2: Training a Sparse Deep Reinforcement Learning Model f
 
 The DST Scheduler is inplemented based on an open-source PyTorch version of [RigL](https://github.com/nollied/rigl-torch) codebase. We implement the RL algorithms based on the official codebase of [TD3](https://github.com/sfujim/TD3) and an open-source PyTorch implementation of [SAC](https://github.com/denisyarats/pytorch_sac).
 
-We use [MuJoCo](https://mujoco.org/) 2.0.0 in [OpenAI gym](https://github.com/openai/gym) for our experiments.
+We use [MuJoCo](https://mujoco.org/) 2.0.0 from [OpenAI gym](https://github.com/openai/gym) for our experiments.
 
 ## Overview
 ```
